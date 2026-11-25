@@ -28,7 +28,7 @@ for (const name of readdirSync(here).sort()) {
   }
 }
 console.log(`entry.png sha256: ${fingerprint(join(here, "entry.png"))}`);
-console.log("lead: Houthis hit Saudi refinery and Riyadh finance hub");
+console.log("lead: Houthis widen strikes on Saudi ports and refinery");
 console.log("cards: Pakistan's first astronaut at China's station; graft purge");
-console.log("       reaches the Politburo; US tariff threat slides markets;");
-console.log("       record 2,100 migrants reach the Canaries in a day");
+console.log("       reaches the Politburo; US proposes tariffs up to 25% on 14");
+console.log("       partners; record 2,100 migrants reach the Canaries in a day");

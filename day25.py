@@ -3,6 +3,13 @@
 # Every item below was reported on 25 November 2026 itself; the poster is a
 # one-picture digest of that single day, not a week-in-review. Sources are
 # the day's wire reporting (Reuters unless noted in the README).
+#
+# Final edition: the evening wires widened the lead story -- after the
+# morning Ras Tanura claim the Houthis also said they hit the ports of
+# Jazan and Jeddah, a projectile landed at Jazan port, and Brent crude
+# jumped over 2%. The tariff card now carries the evening USTR detail
+# (14 partners, up to 25%), and the strip swaps the Giuliani brief for
+# the US warning to citizens to leave Iran.
 
 KICKER = "THE WORLD IN ONE PICTURE"
 DATELINE = "WEDNESDAY 25 NOVEMBER 2026"
@@ -11,12 +18,12 @@ DATELINE = "WEDNESDAY 25 NOVEMBER 2026"
 LEAD = {
     "tag": "SAUDI ARABIA",
     "icon": "flame",
-    "title": "Houthis hit Saudi refinery and Riyadh finance hub",
+    "title": "Houthis widen strikes on Saudi ports and refinery",
     "body": (
-        "Yemen's Houthis said they attacked the Ras Tanura refinery and "
-        "Riyadh's financial district. Saudi air defences downed four drones "
-        "over Ras Tanura, and 11 people were wounded in Tuesday's strike on "
-        "the same Riyadh tower."
+        "Yemen's Houthis said they hit the Ras Tanura refinery and "
+        "Riyadh's finance hub, then claimed strikes on the ports of "
+        "Jazan and Jeddah. Saudi defences downed four drones; Brent "
+        "crude jumped over 2%."
     ),
 }
 
@@ -43,10 +50,10 @@ CARDS = [
     {
         "tag": "TRADE",
         "icon": "globe",
-        "title": "New US tariff threat sends markets sliding",
+        "title": "US proposes tariffs of up to 25% on 14 partners",
         "body": (
-            "Washington may levy duties on 16 trading partners; Nasdaq "
-            "futures fell over 2%."
+            "Washington proposed duties up to 25% on 14 partners; Seoul "
+            "stocks fell 6%."
         ),
     },
     {
@@ -64,5 +71,5 @@ CARDS = [
 STRIP = [
     "Landmines killed or injured nearly 7,000 in 2025, a five-year high",
     "Police free hostages in Colombia supermarket siege",
-    "Trump gives Giuliani the Medal of Freedom",
+    "US tells citizens to leave Iran as Gulf attacks spread",
 ]

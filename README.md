@@ -9,14 +9,15 @@ newspaper front page: a lead story, four cards and a strip of briefs.
 Entry for the [news-image-20261125 bounty](https://make.fun/bounty/news-image-20261125)
 on make.fun.
 
-**Lead — Saudi Arabia.** Yemen's Houthis said they attacked the Ras Tanura
-refinery and Riyadh's financial district; Saudi air defences downed four
-drones and 11 people were wounded.
+**Lead — Saudi Arabia.** Yemen's Houthis said they hit the Ras Tanura
+refinery and Riyadh's financial district, then claimed strikes on the
+ports of Jazan and Jeddah; Saudi air defences downed four drones over
+Ras Tanura and Brent crude jumped over 2%.
 
 **Cards.** Shenzhou-24 docked at Tiangong carrying Zeeshan Ali, the first
 foreigner to board China's station · Shanghai party chief Chen Jining is
-under investigation in the graft purge · Washington's tariff threat against
-16 trading partners sent Nasdaq futures down over 2% · a record 2,100-plus
+under investigation in the graft purge · Washington proposed duties of up
+to 25% on 14 trading partners and Seoul stocks fell 6% · a record 2,100-plus
 migrants reached Spain's Canary Islands in a single day.
 
 **Also today.** Landmine casualties hit a five-year high in 2025 · hostages
