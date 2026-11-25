@@ -1,24 +1,34 @@
-// Entry for make.fun's news-image-20261125 contest: one picture that sums
-// up the world news of Wednesday 25 November 2026.
+// Entry point for the news-image-20261125 submission.
 //
-// The picture ships in this folder as entry.png — a broadsheet front page
-// drawn with PIL by draw.py out of the stories collected in day25.py:
-// Houthi attacks on Saudi Arabia's Ras Tanura refinery and Riyadh's
-// financial district, Pakistan's first astronaut docking at China's
-// Tiangong station aboard Shenzhou-24, Beijing's graft purge reaching
-// another Politburo member, a fresh US tariff threat rattling markets,
-// and a record day of migrant arrivals in the Canary Islands.
-// All this program does at grading time is place that picture where the
-// judges look for it: MAKEFUN_OUTPUT_DIR if the harness sets it,
-// otherwise /output.
+// The artwork itself is produced by the Python renderer in this folder
+// (draw.py paints the page, day25.py holds the words). This script is the
+// dossier the judges open first: it inventories the entry, fingerprints
+// the poster with SHA-256 and prints the day's front page in text form,
+// so the submission can be checked without opening the image.
+//
+// Run it from the kit with:  node main.ts   (or via the makefun CLI)
 
-import { copyFileSync, mkdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { createHash } from "node:crypto";
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const outDir = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
-mkdirSync(outDir, { recursive: true });
-const target = join(outDir, 'entry.png');
-copyFileSync(join(here, 'entry.png'), target);
-console.log(`news-image-20261125: front page for 25 November 2026 written to ${target}`);
+
+function fingerprint(path: string): string {
+  return createHash("sha256").update(readFileSync(path)).digest("hex");
+}
+
+console.log("news-image-20261125 - one picture, one day: Wednesday 25 November 2026");
+console.log("files in this entry:");
+for (const name of readdirSync(here).sort()) {
+  const full = join(here, name);
+  if (statSync(full).isFile()) {
+    console.log(`  ${name}  ${statSync(full).size} bytes`);
+  }
+}
+console.log(`entry.png sha256: ${fingerprint(join(here, "entry.png"))}`);
+console.log("lead: Houthis hit Saudi refinery and Riyadh finance hub");
+console.log("cards: Pakistan's first astronaut at China's station; graft purge");
+console.log("       reaches the Politburo; US tariff threat slides markets;");
+console.log("       record 2,100 migrants reach the Canaries in a day");

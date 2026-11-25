@@ -1,258 +1,264 @@
-# Poster renderer for the make.fun news-image contests: draws a one-page
-# "world news of the day" broadsheet (1024x1024 PNG) with PIL — a date
-# banner, one lead story with an illustration, a grid of story cards with
-# simple editorial icons, and an "also today" ticker strip. Story data
-# lives in dayNN.py files next to this script; every headline and summary
-# is written from that day's wire reports, and the PNG is checked by eye
-# before it is submitted.
+"""Render one day's news as a single broadsheet-style front page.
 
+Usage:  python3 draw.py <day-module> <output.png>
+
+The day module (day25.py and friends) supplies the words: a kicker, a
+dateline, one lead story, four cards and a strip of one-line briefs. This
+file owns everything visual -- the page grid, the type, the red tag chips
+and the little spot illustrations, all drawn with PIL primitives so the
+poster needs no image assets and no network.
+
+Design notes: the page is a 1024x1024 cream sheet. Serif bold carries the
+masthead and every headline, a plain sans carries body copy, and the only
+colour accents are the chip red and the spot-art palette. Every block of
+text is auto-fitted: the font shrinks until the wrapped lines fit their
+box, so a long headline can never push copy over a border.
+"""
+
+import importlib
+import math
 import sys
+
 from PIL import Image, ImageDraw, ImageFont
 
-SERIF_B = "/usr/share/fonts/truetype/liberation/LiberationSerif-Bold.ttf"
-SERIF = "/usr/share/fonts/truetype/liberation/LiberationSerif-Regular.ttf"
-SANS_B = "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"
-SANS = "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"
+PAGE = 1024
+PAPER = (248, 244, 233)
+INK = (20, 20, 20)
+FADED = (107, 98, 82)
+CHIP_RED = (165, 18, 26)
+FLAME_CORE = (224, 123, 36)
+PANEL_BLUE = (38, 74, 135)
 
-PAPER = (247, 243, 234)
-INK = (17, 17, 20)
-RED = (168, 18, 32)
-GRAY = (92, 88, 80)
-CARD = (255, 253, 248)
-LINE = (40, 38, 34)
+SERIF_BOLD = "/usr/share/fonts/truetype/liberation/LiberationSerif-Bold.ttf"
+SANS = "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf"
+SANS_BOLD = "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"
 
 
 def font(path, size):
     return ImageFont.truetype(path, size)
 
 
-def wrap(draw, text, fnt, width):
-    words, lines, cur = text.split(), [], ""
-    for w in words:
-        trial = (cur + " " + w).strip()
-        if draw.textlength(trial, font=fnt) <= width:
-            cur = trial
+def width_of(draw, text, fnt):
+    return draw.textlength(text, font=fnt)
+
+
+def wrap(draw, text, fnt, max_width):
+    """Greedy word wrap measured against the real font metrics."""
+    lines = []
+    current = ""
+    for word in text.split():
+        trial = word if not current else current + " " + word
+        if width_of(draw, trial, fnt) <= max_width:
+            current = trial
         else:
-            if cur:
-                lines.append(cur)
-            cur = w
-    if cur:
-        lines.append(cur)
+            lines.append(current)
+            current = word
+    if current:
+        lines.append(current)
     return lines
 
 
-def text_block(draw, xy, text, fnt, fill, width, leading=1.12, max_lines=None):
-    x, y = xy
-    lines = wrap(draw, text, fnt, width)
-    if max_lines:
-        lines = lines[:max_lines]
-    h = int(fnt.size * leading)
-    for ln in lines:
-        draw.text((x, y), ln, font=fnt, fill=fill)
-        y += h
-    return y
+def fit(draw, text, path, size, max_width, max_lines):
+    """Shrink a font until the wrapped text fits the line budget."""
+    while size > 10:
+        fnt = font(path, size)
+        lines = wrap(draw, text, fnt, max_width)
+        if len(lines) <= max_lines:
+            return fnt, lines
+        size -= 1
+    fnt = font(path, size)
+    return fnt, wrap(draw, text, fnt, max_width)
 
 
-# --- icons: each draws inside box (x0, y0, x1, y1) in INK with RED accents ---
-
-def icon_chip(d, b):
-    x0, y0, x1, y1 = b
-    w, h = x1 - x0, y1 - y0
-    for i in range(5):
-        t = x0 + w * (0.18 + 0.16 * i)
-        d.line([t, y0, t, y0 + h * 0.16], fill=INK, width=7)
-        d.line([t, y1 - h * 0.16, t, y1], fill=INK, width=7)
-        d.line([x0, y0 + h * (0.18 + 0.16 * i), x0 + w * 0.16, y0 + h * (0.18 + 0.16 * i)], fill=INK, width=7)
-        d.line([x1 - w * 0.16, y0 + h * (0.18 + 0.16 * i), x1, y0 + h * (0.18 + 0.16 * i)], fill=INK, width=7)
-    d.rectangle([x0 + w * 0.16, y0 + h * 0.16, x1 - w * 0.16, y1 - h * 0.16], outline=INK, width=9)
-    d.rectangle([x0 + w * 0.36, y0 + h * 0.36, x1 - w * 0.36, y1 - h * 0.36], fill=RED)
+def spaced(draw, cx, y, text, fnt, tracking, fill):
+    """Draw a letter-spaced line centred on cx (for the kicker)."""
+    total = sum(width_of(draw, ch, fnt) for ch in text) + tracking * (len(text) - 1)
+    x = cx - total / 2
+    for ch in text:
+        draw.text((x, y), ch, font=fnt, fill=fill)
+        x += width_of(draw, ch, fnt) + tracking
 
 
-def icon_globe(d, b):
-    x0, y0, x1, y1 = b
-    cx, cy, r = (x0 + x1) // 2, (y0 + y1) // 2, (x1 - x0) // 2 - 4
-    d.ellipse([cx - r, cy - r, cx + r, cy + r], outline=INK, width=8)
-    d.ellipse([cx - r // 2, cy - r, cx + r // 2, cy + r], outline=INK, width=5)
-    d.line([cx - r, cy, cx + r, cy], fill=INK, width=5)
-    d.arc([cx - r, cy - r * 2 // 3, cx + r, cy + r // 3], 0, 180, fill=INK, width=5)
-    d.arc([cx - r, cy - r // 3, cx + r, cy + r * 2 // 3], 180, 360, fill=INK, width=5)
-    # thermometer of a warming world, in red
-    tx = x1 - 26
-    d.rounded_rectangle([tx - 9, y0 + 8, tx + 9, y1 - 34], 9, fill=RED)
-    d.ellipse([tx - 17, y1 - 52, tx + 17, y1 - 18], fill=RED)
+def chip(draw, x, y, label):
+    """The red section tag that sits at the top-left of every story."""
+    fnt = font(SANS_BOLD, 20)
+    w = width_of(draw, label, fnt)
+    draw.rectangle([x, y, x + w + 22, y + 32], fill=CHIP_RED)
+    draw.text((x + 11, y + 5), label, font=fnt, fill=(255, 255, 255))
+    return y + 32
 
 
-def icon_capitol(d, b):
-    x0, y0, x1, y1 = b
-    cx = (x0 + x1) // 2
-    d.polygon([(cx, y0 + 6), (x0 + 30, y0 + (y1 - y0) // 3), (x1 - 30, y0 + (y1 - y0) // 3)], fill=INK)
-    d.line([cx, y0, cx, y0 - 2], fill=INK, width=6)
-    base = y0 + (y1 - y0) // 3 + 8
-    d.rectangle([x0 + 16, base, x1 - 16, base + 10], fill=INK)
-    for i in range(5):
-        px = x0 + 30 + i * (x1 - x0 - 60) // 4
-        d.rectangle([px - 6, base + 16, px + 6, y1 - 26], fill=INK)
-    d.rectangle([x0 + 8, y1 - 22, x1 - 8, y1 - 8], fill=RED)
+# ---------------------------------------------------------------- spot art
+# Each icon draws inside the box (x, y, w, h) it is handed. They are simple
+# flat shapes on purpose: at 300px wide the poster must still read clearly.
+
+def icon_flame(d, x, y, w, h):
+    outer = [
+        (x + 0.52 * w, y),
+        (x + 0.64 * w, y + 0.26 * h),
+        (x + 0.82 * w, y + 0.52 * h),
+        (x + 0.78 * w, y + 0.85 * h),
+        (x + 0.68 * w, y + h),
+        (x + 0.32 * w, y + h),
+        (x + 0.22 * w, y + 0.84 * h),
+        (x + 0.18 * w, y + 0.52 * h),
+        (x + 0.33 * w, y + 0.30 * h),
+    ]
+    d.polygon(outer, fill=CHIP_RED)
+    inner = [
+        (x + 0.52 * w, y + 0.38 * h),
+        (x + 0.63 * w, y + 0.60 * h),
+        (x + 0.62 * w, y + 0.88 * h),
+        (x + 0.56 * w, y + h),
+        (x + 0.42 * w, y + h),
+        (x + 0.38 * w, y + 0.86 * h),
+        (x + 0.40 * w, y + 0.58 * h),
+    ]
+    d.polygon(inner, fill=FLAME_CORE)
+    d.rectangle([x - 0.28 * w, y + h + 10, x + 1.05 * w, y + h + 18], fill=INK)
 
 
-def icon_ship(d, b):
-    x0, y0, x1, y1 = b
-    w, h = x1 - x0, y1 - y0
-    mid = y0 + h * 3 // 5
-    d.polygon([(x0 + 6, mid), (x1 - 6, mid), (x1 - 22, y1 - 26), (x0 + 22, y1 - 26)], fill=INK)
-    d.rectangle([x0 + w * 28 // 100, mid - 22, x0 + w * 46 // 100, mid], fill=INK)
-    d.rectangle([x0 + w * 52 // 100, mid - 14, x0 + w * 68 // 100, mid], fill=RED)
-    # drone above
-    dx, dy = x0 + w * 72 // 100, y0 + 14
-    d.ellipse([dx - 7, dy - 7, dx + 7, dy + 7], fill=RED)
-    for sx, sy in ((-16, -8), (16, -8), (-16, 8), (16, 8)):
-        d.line([dx, dy, dx + sx, dy + sy], fill=INK, width=4)
-        d.ellipse([dx + sx - 5, dy + sy - 5, dx + sx + 5, dy + sy + 5], outline=INK, width=3)
-    for i in range(3):
-        wx = x0 + 4 + i * (w - 30) // 2
-        d.arc([wx, y1 - 18, wx + 26, y1 - 4], 0, 180, fill=INK, width=4)
-        d.arc([wx + 13, y1 - 18, wx + 39, y1 - 4], 180, 360, fill=INK, width=4)
+def icon_station(d, x, y, w, h):
+    mid_y = y + 0.52 * h
+    # solar wings, two blue panels either side of the hull
+    for px in (x, x + 0.70 * w):
+        d.rectangle([px, mid_y - 0.20 * h, px + 0.30 * w, mid_y + 0.20 * h], fill=PANEL_BLUE)
+        d.line([px + 0.15 * w, mid_y - 0.20 * h, px + 0.15 * w, mid_y + 0.20 * h], fill=PAPER, width=3)
+    d.rectangle([x + 0.40 * w, mid_y - 0.26 * h, x + 0.60 * w, mid_y + 0.26 * h], fill=INK)
+    d.rectangle([x + 0.46 * w, mid_y - 0.14 * h, x + 0.54 * w, mid_y + 0.14 * h], fill=PAPER)
+    # the red arc of the orbit passing overhead
+    d.arc([x + 0.05 * w, y - 0.15 * h, x + 0.95 * w, y + 0.75 * h], start=180, end=360, fill=CHIP_RED, width=6)
+    d.ellipse([x + 0.46 * w, y - 0.02 * h, x + 0.54 * w, y + 0.10 * h], fill=CHIP_RED)
 
 
-def icon_trophy(d, b):
-    x0, y0, x1, y1 = b
-    cx = (x0 + x1) // 2
-    w = x1 - x0
-    d.polygon([(x0 + w // 4, y0 + 6), (x1 - w // 4, y0 + 6), (x1 - w // 4 - 8, y0 + (y1 - y0) // 2), (cx + 14, y0 + (y1 - y0) // 2 + 12), (cx - 14, y0 + (y1 - y0) // 2 + 12), (x0 + w // 4 + 8, y0 + (y1 - y0) // 2)], fill=INK)
-    d.arc([x0 + 2, y0 + 4, x0 + w // 3, y0 + (y1 - y0) // 2], 90, 300, fill=INK, width=7)
-    d.arc([x1 - w // 3, y0 + 4, x1 - 2, y0 + (y1 - y0) // 2], 240, 90, fill=INK, width=7)
-    d.rectangle([cx - 9, y0 + (y1 - y0) // 2 + 12, cx + 9, y1 - 30], fill=INK)
-    d.rectangle([cx - 34, y1 - 28, cx + 34, y1 - 12], fill=RED)
-    d.ellipse([cx - 15, y0 + 22, cx + 15, y0 + 52], fill=PAPER, outline=RED, width=4)
+def icon_capitol(d, x, y, w, h):
+    cx = x + 0.5 * w
+    d.line([cx, y, cx, y + 0.10 * h], fill=INK, width=5)
+    d.polygon(
+        [(cx, y + 0.08 * h), (x + 0.80 * w, y + 0.52 * h), (x + 0.20 * w, y + 0.52 * h)],
+        fill=INK,
+    )
+    d.rectangle([x + 0.28 * w, y + 0.58 * h, x + 0.72 * w, y + 0.78 * h], fill=INK)
+    d.rectangle([x + 0.10 * w, y + 0.84 * h, x + 0.90 * w, y + 0.97 * h], fill=CHIP_RED)
 
 
-def icon_flame(d, b):
-    x0, y0, x1, y1 = b
-    cx = (x0 + x1) // 2
-    d.polygon([(cx, y0 + 2), (cx + 30, y0 + 52), (cx + 40, y0 + 92), (cx + 26, y1 - 14), (cx - 26, y1 - 14), (cx - 40, y0 + 92), (cx - 28, y0 + 50), (cx - 12, y0 + 66), (cx - 6, y0 + 40)], fill=RED)
-    d.polygon([(cx, y0 + 52), (cx + 16, y0 + 88), (cx + 12, y1 - 16), (cx - 12, y1 - 16), (cx - 16, y0 + 88)], fill=(240, 140, 40))
-    d.rectangle([x0 + 8, y1 - 8, x1 - 8, y1 - 2], fill=INK)
+def icon_globe(d, x, y, w, h):
+    d.ellipse([x, y, x + w, y + h], outline=INK, width=6)
+    # meridians: two ellipses pinched through the middle of the sphere
+    for frac in (0.22, 0.36):
+        inset = w * frac
+        d.ellipse([x + inset, y, x + w - inset, y + h], outline=INK, width=4)
+    d.line([x + 0.5 * w, y, x + 0.5 * w, y + h], fill=INK, width=4)
+    # parallels, drawn as chords so they stay inside the circle
+    for frac, half in ((0.30, 0.44), (0.50, 0.50), (0.70, 0.44)):
+        yy = y + frac * h
+        d.line([x + (0.5 - half) * w, yy, x + (0.5 + half) * w, yy], fill=INK, width=4)
+    # a market thermometer riding the right-hand edge
+    tx = x + 0.78 * w
+    d.rounded_rectangle([tx, y + 0.08 * h, tx + 0.13 * w, y + 0.78 * h], radius=8, fill=CHIP_RED)
+    d.ellipse([tx - 0.05 * w, y + 0.68 * h, tx + 0.18 * w, y + 0.95 * h], fill=CHIP_RED)
 
 
-def icon_satellite(d, b):
-    x0, y0, x1, y1 = b
-    cx, cy = (x0 + x1) // 2, (y0 + y1) // 2
-    d.rectangle([cx - 22, cy - 18, cx + 22, cy + 18], fill=INK)
-    d.rectangle([x0 + 4, cy - 26, cx - 34, cy + 26], fill=(52, 84, 150))
-    d.rectangle([cx + 34, cy - 26, x1 - 4, cy + 26], fill=(52, 84, 150))
-    for gx in range(3):
-        d.line([x0 + 16 + gx * 22, cy - 26, x0 + 16 + gx * 22, cy + 26], fill=PAPER, width=3)
-        d.line([cx + 46 + gx * 22, cy - 26, cx + 46 + gx * 22, cy + 26], fill=PAPER, width=3)
-    d.ellipse([cx - 6, cy - 30, cx + 6, cy - 18], fill=RED)
-    d.arc([x0 - 6, y0 + 16, x1 + 6, y1 + 30], 200, 330, fill=RED, width=5)
-
-
-def icon_gamepad(d, b):
-    x0, y0, x1, y1 = b
-    cy = (y0 + y1) // 2
-    d.rounded_rectangle([x0 + 4, cy - 34, x1 - 4, cy + 34], 30, fill=INK)
-    d.line([x0 + 34, cy - 12, x0 + 34, cy + 12], fill=PAPER, width=8)
-    d.line([x0 + 22, cy, x0 + 46, cy], fill=PAPER, width=8)
-    for dx, dy in ((0, -12), (12, 0), (0, 12), (-12, 0)):
-        d.ellipse([x1 - 44 + dx - 6, cy + dy - 6, x1 - 44 + dx + 6, cy + dy + 6], fill=RED if dy == 0 else PAPER)
-    # gavel slash: sentence bar
-    d.rectangle([x0 + 10, y1 - 16, x1 - 10, y1 - 6], fill=RED)
-
-
-def icon_jet(d, b):
-    x0, y0, x1, y1 = b
-    cy = (y0 + y1) // 2
-    d.polygon([(x1 - 6, cy), (x0 + 52, cy - 10), (x0 + 30, cy - 30), (x0 + 16, cy - 28), (x0 + 26, cy - 6), (x0 + 10, cy), (x0 + 26, cy + 6), (x0 + 16, cy + 28), (x0 + 30, cy + 30), (x0 + 52, cy + 10)], fill=INK)
-    d.ellipse([x1 - 44, cy - 6, x1 - 26, cy + 6], fill=RED)
-    for i, ln in enumerate((44, 64, 84)):
-        d.line([x0 + 2, cy - 20 + i * 20, x0 + 2 + ln // 3, cy - 20 + i * 20], fill=GRAY, width=5)
-
-
-def icon_phone_ban(d, b):
-    x0, y0, x1, y1 = b
-    cx = (x0 + x1) // 2
-    d.rounded_rectangle([cx - 30, y0 + 4, cx + 30, y1 - 4], 10, outline=INK, width=8)
-    d.line([cx - 12, y1 - 18, cx + 12, y1 - 18], fill=INK, width=6)
-    r = (x1 - x0) // 2 - 2
-    ccx, ccy = (x0 + x1) // 2, (y0 + y1) // 2
-    d.ellipse([ccx - r, ccy - r, ccx + r, ccy + r], outline=RED, width=10)
-    d.line([ccx - r * 7 // 10, ccy + r * 7 // 10, ccx + r * 7 // 10, ccy - r * 7 // 10], fill=RED, width=10)
-
-
-def icon_document(d, b):
-    x0, y0, x1, y1 = b
-    d.polygon([(x0 + 14, y0 + 2), (x1 - 40, y0 + 2), (x1 - 12, y0 + 30), (x1 - 12, y1 - 2), (x0 + 14, y1 - 2)], fill=CARD, outline=INK, width=0)
-    d.rectangle([x0 + 14, y0 + 2, x1 - 12, y1 - 2], outline=INK, width=7)
-    for i in range(3):
-        yy = y0 + 34 + i * 26
-        d.line([x0 + 30, yy, x1 - 30, yy], fill=GRAY, width=6)
-    d.text(((x0 + x1) // 2, y1 - 52), "500,000", font=font(SANS_B, 30), fill=RED, anchor="mm")
-
-
-def icon_wheat(d, b):
-    x0, y0, x1, y1 = b
-    cx = (x0 + x1) // 2
-    d.line([cx, y1 - 4, cx, y0 + 30], fill=(176, 124, 32), width=7)
-    for i in range(4):
-        yy = y0 + 20 + i * 26
-        d.polygon([(cx, yy + 18), (cx - 24, yy - 6), (cx - 4, yy - 10)], fill=(206, 152, 44))
-        d.polygon([(cx, yy + 18), (cx + 24, yy - 6), (cx + 4, yy - 10)], fill=(206, 152, 44))
+def icon_ship(d, x, y, w, h):
+    hull = [
+        (x, y + 0.38 * h),
+        (x + w, y + 0.38 * h),
+        (x + 0.84 * w, y + 0.66 * h),
+        (x + 0.14 * w, y + 0.66 * h),
+    ]
+    d.polygon(hull, fill=INK)
+    d.rectangle([x + 0.16 * w, y + 0.20 * h, x + 0.44 * w, y + 0.38 * h], fill=INK)
+    d.rectangle([x + 0.56 * w, y + 0.12 * h, x + 0.70 * w, y + 0.38 * h], fill=CHIP_RED)
+    # two gentle rows of waves under the hull
+    for row, yy in enumerate((0.80, 0.92)):
+        pts = []
+        for i in range(17):
+            px = x + (i / 16) * w
+            py = y + yy * h + 5 * math.sin(i * 1.1 + row * 2.0)
+            pts.append((px, py))
+        d.line(pts, fill=INK, width=4)
 
 
 ICONS = {
-    "chip": icon_chip, "globe": icon_globe, "capitol": icon_capitol,
-    "ship": icon_ship, "trophy": icon_trophy, "flame": icon_flame,
-    "satellite": icon_satellite, "gamepad": icon_gamepad, "jet": icon_jet,
-    "phone": icon_phone_ban, "document": icon_document, "wheat": icon_wheat,
+    "flame": icon_flame,
+    "station": icon_station,
+    "capitol": icon_capitol,
+    "globe": icon_globe,
+    "ship": icon_ship,
 }
 
 
-def chip_tag(d, xy, text):
-    x, y = xy
-    f = font(SANS_B, 19)
-    w = d.textlength(text, font=f) + 18
-    d.rectangle([x, y, x + w, y + 28], fill=RED)
-    d.text((x + 9, y + 4), text, font=f, fill=(255, 255, 255))
-    return w
+# ------------------------------------------------------------------- page
+
+def masthead(d, day):
+    spaced(d, PAGE / 2, 38, day.KICKER, font(SANS_BOLD, 26), 7, FADED)
+    size = 58
+    while width_of(d, day.DATELINE, font(SERIF_BOLD, size)) > 940 and size > 20:
+        size -= 2
+    fnt = font(SERIF_BOLD, size)
+    w = width_of(d, day.DATELINE, fnt)
+    d.text(((PAGE - w) / 2, 74), day.DATELINE, font=fnt, fill=INK)
+    d.rectangle([36, 146, 988, 151], fill=INK)
+    d.line([36, 157, 988, 157], fill=INK, width=2)
+
+
+def lead_box(d, story):
+    d.rectangle([36, 176, 988, 472], outline=INK, width=2)
+    chip(d, 58, 196, story["tag"])
+    ICONS[story["icon"]](d, 118, 238, 165, 190)
+    title_fnt, title_lines = fit(d, story["title"], SERIF_BOLD, 50, 628, 3)
+    y = 200
+    for line in title_lines:
+        d.text((330, y), line, font=title_fnt, fill=INK)
+        y += 58
+    body_fnt, body_lines = fit(d, story["body"], SANS, 25, 628, 4)
+    y += 12
+    for line in body_lines:
+        d.text((330, y), line, font=body_fnt, fill=INK)
+        y += 34
+
+
+def card(d, x, y, story):
+    w, h = 464, 216
+    d.rectangle([x, y, x + w, y + h], outline=INK, width=2)
+    chip(d, x + 18, y + 16, story["tag"])
+    ICONS[story["icon"]](d, x + 22, y + 58, 104, 82)
+    title_fnt, title_lines = fit(d, story["title"], SERIF_BOLD, 30, w - 158, 3)
+    ty = y + 54
+    for line in title_lines:
+        d.text((x + 142, ty), line, font=title_fnt, fill=INK)
+        ty += 35
+    body_fnt, body_lines = fit(d, story["body"], SANS, 21, w - 36, 2)
+    by = y + 160
+    for line in body_lines:
+        d.text((x + 18, by), line, font=body_fnt, fill=INK)
+        by += 26
+
+
+def strip(d, items):
+    d.rectangle([36, 950, 988, 953], fill=INK)
+    d.line([36, 958, 988, 958], fill=INK, width=1)
+    d.text((36, 966), "ALSO TODAY:", font=font(SANS_BOLD, 20), fill=CHIP_RED)
+    body_fnt, lines = fit(d, "  ·  ".join(items), SANS, 20, 788, 2)
+    y = 966
+    for line in lines:
+        d.text((200, y), line, font=body_fnt, fill=INK)
+        y += 24
 
 
 def render(day, out_path):
-    img = Image.new("RGB", (1024, 1024), PAPER)
+    img = Image.new("RGB", (PAGE, PAGE), PAPER)
     d = ImageDraw.Draw(img)
-    # header
-    d.text((512, 30), "T H E   W O R L D   I N   O N E   P I C T U R E", font=font(SANS_B, 25), fill=GRAY, anchor="ma")
-    d.text((512, 62), day["date_line"], font=font(SERIF_B, 56), fill=INK, anchor="ma")
-    d.line([36, 140, 988, 140], fill=INK, width=5)
-    d.line([36, 148, 988, 148], fill=INK, width=2)
-    # lead story
-    lead = day["lead"]
-    d.rectangle([36, 162, 988, 470], fill=CARD, outline=LINE, width=2)
-    chip_tag(d, (64, 180), lead["tag"])
-    ICONS[lead["icon"]](d, (64, 222, 292, 450))
-    tx = 324
-    y = text_block(d, (tx, 182), lead["headline"], font(SERIF_B, 46), INK, 636, 1.08, 3)
-    text_block(d, (tx, y + 12), lead["summary"], font(SANS, 24), (40, 40, 44), 636, 1.22, 4)
-    # grid of four
-    cards = day["cards"]
-    gx, gy, gw, gh, gap = 36, 486, 468, 226, 16
-    for i, card in enumerate(cards):
-        x = gx + (i % 2) * (gw + gap)
-        yy = gy + (i // 2) * (gh + gap)
-        d.rectangle([x, yy, x + gw, yy + gh], fill=CARD, outline=LINE, width=2)
-        chip_tag(d, (x + 16, yy + 12), card["tag"])
-        ICONS[card["icon"]](d, (x + 16, yy + 52, x + 126, yy + 162))
-        text_block(d, (x + 140, yy + 50), card["headline"], font(SERIF_B, 29), INK, gw - 156, 1.1, 3)
-        text_block(d, (x + 16, yy + 170), card["summary"], font(SANS, 20), (40, 40, 44), gw - 32, 1.18, 2)
-    # ticker
-    ty = 962
-    d.line([36, ty, 988, ty], fill=INK, width=3)
-    d.text((36, ty + 8), "ALSO TODAY:", font=font(SANS_B, 19), fill=RED)
-    text_block(d, (196, ty + 9), "  ·  ".join(day["ticker"]), font(SANS, 19), (40, 40, 44), 792, 1.18, 2)
+    masthead(d, day)
+    lead_box(d, day.LEAD)
+    positions = [(36, 492), (524, 492), (36, 726), (524, 726)]
+    for (x, y), story in zip(positions, day.CARDS):
+        card(d, x, y, story)
+    strip(d, day.STRIP)
     img.save(out_path)
     return out_path
 
 
 if __name__ == "__main__":
-    mod = __import__(sys.argv[1])
-    render(mod.DAY, sys.argv[2])
-    print("wrote", sys.argv[2])
+    module = importlib.import_module(sys.argv[1])
+    print(render(module, sys.argv[2]))
