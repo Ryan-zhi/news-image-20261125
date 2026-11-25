@@ -1,11 +1,13 @@
 # The World in One Picture — Wednesday 25 November 2026
 
-![bounty](https://make.fun/badge/news-image-20261125.svg)
-![rank](https://make.fun/badge/news-image-20261125/Ryan-zhi/news-image-20261125/rank.svg)
-![reward](https://make.fun/badge/news-image-20261125/Ryan-zhi/news-image-20261125/reward.svg)
+[![make.fun · news-image-20261125](https://make.fun/badge/news-image-20261125.svg)](https://make.fun/bounty/news-image-20261125?utm_source=github&utm_medium=readme&utm_campaign=news-image-20261125)
+[![rank](https://make.fun/badge/news-image-20261125/Ryan-zhi/news-image-20261125/rank.svg)](https://make.fun/bounty/news-image-20261125/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=news-image-20261125)
+[![reward](https://make.fun/badge/news-image-20261125/Ryan-zhi/news-image-20261125/reward.svg)](https://make.fun/bounty/news-image-20261125?utm_source=github&utm_medium=readme&utm_campaign=news-image-20261125)
 
 One image that sums up the world news of **25 November 2026**, drawn as a
 newspaper front page: a lead story, four cards and a strip of briefs.
+Entry for the [news-image-20261125 bounty](https://make.fun/bounty/news-image-20261125)
+on make.fun.
 
 **Lead — Saudi Arabia.** Yemen's Houthis said they attacked the Ras Tanura
 refinery and Riyadh's financial district; Saudi air defences downed four
@@ -32,4 +34,4 @@ python3 draw.py day25 entry.png
 ```
 
 Every story ran on 25 November 2026; sources are that day's wire reports
-(Reuters). Text is set in DejaVu Serif / DejaVu Sans. MIT licensed.
+(Reuters). Text is set in Liberation Serif / Liberation Sans. MIT licensed.
